@@ -7,34 +7,30 @@ matplotlib.style.use('ggplot')
 import numpy as np
 import copy
 
+
 import os
 os.system('cls')
 
 # import data
-data_train_total = pd.read_csv('kc_house_train_data.csv')
-data_test_total = pd.read_csv('kc_house_test_data.csv')
-
-#data.info()
+data = pd.read_csv('kc_house_data.csv')
+data.info()
 #print data.describe()
 
 ## visualization
-# data.plot(kind= 'box', sharex= False, subplots = True, layout = (4,5))
-#
-# data.hist()
-#
-# data.plot(x = 'bedrooms', y = 'price', kind ='scatter')
-#
-# data.plot(x = 'lat', y = 'price', kind ='scatter')
-#
-# data.plot(x = 'long', y = 'price', kind ='scatter', color = 'k')
-#
-# plt.figure()
-# data['sqft_living'].plot(kind = 'box')
+data.plot(kind= 'box', sharex= False, subplots = True, layout = (4,5))
 
-# to observe overfitting and regularization we may increase # features or
-# reduce number of data points
-data = data_train_total.sample(80, axis = 0)
-data_test = data_test_total.sample(50,axis = 0)
+data.hist()
+
+data.plot(x = 'bedrooms', y = 'price', kind ='scatter')
+
+data.plot(x = 'lat', y = 'price', kind ='scatter')
+
+data.plot(x = 'long', y = 'price', kind ='scatter', color = 'k')
+
+
+plt.figure()
+data['sqft_living'].plot(kind = 'box')
+
 
 ## withdraw outliers
 
@@ -44,10 +40,31 @@ data['sqrt_sqft_lot'] = np.sqrt(data['sqft_lot'])
 data['square_bed'] = data['bedrooms']* data['bedrooms']
 data['bedbath'] = data['bedrooms']* data['bathrooms']
 
-data_test['sqrt_sqft_living'] = np.sqrt(data_test['sqft_living'])
-data_test['sqrt_sqft_lot'] = np.sqrt(data_test['sqft_lot'])
-data_test['square_bed'] = data_test['bedrooms']* data_test['bedrooms']
-data_test['bedbath'] = data_test['bedrooms']* data_test['bathrooms']
+
+my_features = ['bedrooms','bathrooms','sqft_living','sqft_lot','floors',
+                'waterfront', 'view', 'condition', 'grade','sqft_above',
+                'sqft_basement','yr_built','yr_renovated', 'sqrt_sqft_living',
+                'sqrt_sqft_lot', 'square_bed', 'bedbath', 'lat', 'long' ]
+
+def random_split(df, proportion):
+    ''' split data frame randomly to two section based on the given proportion
+    '''
+    df_prim = copy.copy(df)
+    df_shuffled = df.sample(frac = 1,  random_state =6)
+    m = np.int (df_shuffled.shape[0]* proportion)
+    df_train = df_shuffled[0:m]
+    df_test = df_shuffled[m:]
+
+    return df_train, df_test
+
+df_train, df_test = random_split(data, .8)
+
+
+# to observe overfitting and regularization we may increase # features or
+# reduce number of data points
+data = df_train.sample(300, axis = 0, random_state =6)
+data_test = df_test.sample(60,axis = 0, random_state =6)
+
 
 ## convert dataframe to numpy array
 def convert_to_np(dataframe, features_list, target):
@@ -59,31 +76,9 @@ def convert_to_np(dataframe, features_list, target):
 
     return x,y
 
-my_features = ['bedrooms','bathrooms','sqft_living','sqft_lot','floors',
-                'waterfront', 'view', 'condition', 'grade','sqft_above',
-                'sqft_basement','yr_built','yr_renovated', 'sqrt_sqft_living',
-                'sqrt_sqft_lot', 'square_bed', 'bedbath' ]
-
 x, y = convert_to_np(data, my_features, ['price'])
 x_test, y_test = convert_to_np(data_test, my_features, ['price'])
 
-
-# def split(x, y, percent):
-#     ''' split data points to train and validation ( later for choosing landa)'''
-#     random_indices = np.random.choice(x.shape[0], size = np.round(x.shape[0]*percent), replace = False )
-#     x1 = x[random_indices]
-#     x2 = np.delete(x, random_indices, axis=0)
-#
-#     y1 =y[random_indices]
-#     y2 = np.delete(y, random_indices, axis=0)
-#     return x1,y1,x2,y2
-#     # copy_x = copy.copy(x)
-#     # copy_y = copy.copy(y)
-#     # np.random.shuffle(copy_data)
-#     # n = np.round(data.shape[0]*percent)
-#     # data1 = copy_data[:n , :]
-#     # data2 = copy_data[n: , :]
-#     #return data1, data2
 
 def RSS(x, y , teta):
     ''' compute Risidual Sum of Suare for the given weights'''
@@ -104,15 +99,25 @@ def regression_close_form(x, y, lamb = 0):
     teta = np.dot(np.linalg.pinv(np.dot(x.T, x) + lamb*I) , np.dot(x.T, y))
     return teta
 
-weights = regression_close_form(x, y, lamb = 0)
-prediction = np.dot(x,weights)
-plt.plot(prediction, 'ro')
-plt.plot(y , 'bo')
-plt.title(' real price and prediction for train data for lambda = 0')
+rss_train = []
+rss_test = []
+def learning_curve(x,y, x_test, y_test, lamb = 0):
+    for m in range(30, x.shape[0], 5):
+        teta = regression_close_form(x[:m], y[:m], lamb )
+        rss_train.append(RSS(x[:m], y[:m] , teta))
+        rss_test .append(RSS(x_test, y_test , teta))
+    plt.plot(range(30, x.shape[0], 5), rss_train, 'bo',label='train data')
+    plt.plot(range(30, x.shape[0], 5), rss_test, 'ro', label = 'test data')
+    plt.title('learning curve')
+    plt.xlabel('number of data points')
+    plt.ylabel('error')
+    plt.legend()
 
+plt.figure()
+learning_curve(x,y, x_test, y_test, lamb = 0)
 
-
-col = np.array(range(17))
+a = len(my_features)
+col = np.array(range(a))
 rss_train = []
 rss_test = []
 lamb_range = range(0,1000,100)
@@ -123,7 +128,7 @@ plt.xlabel('lambda')
 plt.ylabel('all weights except constant')
 for lamb in lamb_range:
     teta = regression_close_form(x, y, lamb)
-    plt.scatter(np.array([lamb]*17), teta[1:], c = col)
+    plt.scatter(np.array([lamb]*a), teta[1:], c = col)
     rss_train.append(RSS(x, y , teta))
     rss_test.append(RSS(x_test, y_test , teta))
 #
@@ -131,7 +136,10 @@ plt.figure()
 plt.plot( lamb_range, rss_train, 'bo', label = 'RSS for train')
 # this is just for observance but this is not used for parameter selection and training
 plt.plot( lamb_range, rss_test, 'ko', label = 'RSS for test')
+plt.xlabel('lambda')
+plt.ylabel('error')
 plt.legend()
+#
 
 def cross_validation(x, y, lamb_range, num_sections = 5):
     '''
@@ -166,7 +174,5 @@ plt.figure()
 plt.plot(lamb_range, rss)
 plt.xlabel('lambda')
 plt.title(' average rss on the validation set for different lambda values')
-
-
 
 plt.show()
